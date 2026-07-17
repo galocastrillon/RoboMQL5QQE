@@ -1,7 +1,7 @@
 #property copyright "RoboQQE"
-#property version   "1.00"
+#property version   "1.10"
 #property indicator_separate_window
-#property indicator_buffers 4
+#property indicator_buffers 2
 #property indicator_plots   1
 #property indicator_label1  "QQE"
 #property indicator_type1   DRAW_LINE
@@ -18,53 +18,59 @@ input int    InpRSIPeriod     = 14;
 input int    InpSmoothing     = 5;
 input double InpQQEFactor     = 4.238;
 
-double QQEBuffer[];
-double RsiBuffer[], AtrRsiBuffer[], DarBuffer[];
+double QQEBuffer[];   // Buffer 0: linea visible y gatillo que lee el EA.
+double RsiBuffer[];   // Buffer 1: RSI copiado (calculo interno).
 int    rsiHandle = INVALID_HANDLE;
+int    firstValid = 0;
 
 int OnInit()
 {
-   if(InpRSIPeriod < 2 || InpSmoothing < 1 || InpQQEFactor<=0.0) return(INIT_PARAMETERS_INCORRECT);
-   SetIndexBuffer(0,QQEBuffer,INDICATOR_DATA);
-   SetIndexBuffer(1,RsiBuffer,INDICATOR_CALCULATIONS);
-   SetIndexBuffer(2,AtrRsiBuffer,INDICATOR_CALCULATIONS);
-   SetIndexBuffer(3,DarBuffer,INDICATOR_CALCULATIONS);
-   ArraySetAsSeries(QQEBuffer,true);
-   ArraySetAsSeries(RsiBuffer,true);
-   ArraySetAsSeries(AtrRsiBuffer,true);
-   ArraySetAsSeries(DarBuffer,true);
-   rsiHandle=iRSI(_Symbol,_Period,InpRSIPeriod,PRICE_CLOSE);
-   if(rsiHandle==INVALID_HANDLE) return(INIT_FAILED);
-   IndicatorSetString(INDICATOR_SHORTNAME,"QQE Mod ("+(string)InpRSIPeriod+","+(string)InpSmoothing+")");
+   if(InpRSIPeriod < 2 || InpSmoothing < 1 || InpQQEFactor <= 0.0) return(INIT_PARAMETERS_INCORRECT);
+
+   // Buffers en orden natural (0 = vela mas antigua); coincide con los arrays de OnCalculate.
+   SetIndexBuffer(0, QQEBuffer, INDICATOR_DATA);
+   SetIndexBuffer(1, RsiBuffer, INDICATOR_CALCULATIONS);
+
+   rsiHandle = iRSI(_Symbol, _Period, InpRSIPeriod, PRICE_CLOSE);
+   if(rsiHandle == INVALID_HANDLE) return(INIT_FAILED);
+
+   firstValid = InpRSIPeriod;
+   PlotIndexSetInteger(0, PLOT_DRAW_BEGIN, firstValid);
+   PlotIndexSetDouble(0, PLOT_EMPTY_VALUE, EMPTY_VALUE);
+   IndicatorSetInteger(INDICATOR_DIGITS, 2);
+   IndicatorSetString(INDICATOR_SHORTNAME, "QQE Mod (" + (string)InpRSIPeriod + "," + (string)InpSmoothing + ")");
    return(INIT_SUCCEEDED);
 }
 
 void OnDeinit(const int reason)
 {
-   if(rsiHandle!=INVALID_HANDLE) IndicatorRelease(rsiHandle);
+   if(rsiHandle != INVALID_HANDLE) IndicatorRelease(rsiHandle);
 }
 
-int OnCalculate(const int rates_total,const int prev_calculated,const datetime &time[],
-                const double &open[],const double &high[],const double &low[],
-                const double &close[],const long &tick_volume[],const long &volume[],const int &spread[])
+int OnCalculate(const int rates_total, const int prev_calculated, const datetime &time[],
+                const double &open[], const double &high[], const double &low[],
+                const double &close[], const long &tick_volume[], const long &volume[], const int &spread[])
 {
-   if(rates_total < InpRSIPeriod+InpSmoothing+2) return(0);
-   if(CopyBuffer(rsiHandle,0,0,rates_total,RsiBuffer) != rates_total) return(0);
-   // Se calcula del pasado al presente: los arrays de precio están en serie (0 = vela actual).
-   for(int i=rates_total-1;i>=0;i--)
-   {
-      if(i==rates_total-1) QQEBuffer[i]=RsiBuffer[i]-50.0;
-      else QQEBuffer[i]=(QQEBuffer[i+1]*(InpSmoothing-1)+(RsiBuffer[i]-50.0))/InpSmoothing;
+   if(rates_total < firstValid + InpSmoothing + 2) return(0);
 
-      // Rango dinámico QQE clásico: suavizado Wilder doble de los cambios del RSI.
-      // Se conserva como cálculo interno; la línea visual/trigger es el RSI suavizado centrado en cero.
-      if(i==rates_total-1) { AtrRsiBuffer[i]=0.0; DarBuffer[i]=0.0; }
-      else
-      {
-         int wilders=2*InpRSIPeriod-1;
-         AtrRsiBuffer[i]=(AtrRsiBuffer[i+1]*(wilders-1)+MathAbs(QQEBuffer[i]-QQEBuffer[i+1]))/wilders;
-         DarBuffer[i]=(DarBuffer[i+1]*(wilders-1)+AtrRsiBuffer[i])/wilders*InpQQEFactor;
-      }
+   // Se espera a que el RSI tenga todo el historico calculado (evita pantalla en blanco al adjuntar).
+   if(CopyBuffer(rsiHandle, 0, 0, rates_total, RsiBuffer) < rates_total)
+      return(prev_calculated);
+
+   int start;
+   if(prev_calculated == 0)
+   {
+      for(int i = 0; i < firstValid && i < rates_total; i++) QQEBuffer[i] = EMPTY_VALUE;
+      QQEBuffer[firstValid] = RsiBuffer[firstValid] - 50.0;   // Semilla del suavizado.
+      start = firstValid + 1;
    }
+   else
+      start = prev_calculated - 1;                            // Recalcula la ultima vela (en formacion).
+
+   if(start < firstValid + 1) start = firstValid + 1;
+
+   for(int i = start; i < rates_total; i++)
+      QQEBuffer[i] = (QQEBuffer[i - 1] * (InpSmoothing - 1) + (RsiBuffer[i] - 50.0)) / InpSmoothing;
+
    return(rates_total);
 }

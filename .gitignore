@@ -1,0 +1,4 @@
+# Artefactos de compilacion de MetaEditor (se regeneran al compilar)
+*.ex5
+*.ex4
+*.log

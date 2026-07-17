@@ -42,6 +42,7 @@ input int             InpDeviationPoints = 10;
 input string InpQQEIndicator   = "RoboQQE\\QQE_Mod";
 input string InpTrendIndicator = "RoboQQE\\Trend_Magic";
 input string InpSSLIndicator   = "RoboQQE\\SSL_Hybrid_JMA";
+input bool   InpShowIndicators = true; // Dibuja los 3 indicadores en el grafico al cargar el EA
 
 CTrade trade;
 int qqeHandle=INVALID_HANDLE, trendHandle=INVALID_HANDLE, sslHandle=INVALID_HANDLE, atrHandle=INVALID_HANDLE;
@@ -64,7 +65,39 @@ int OnInit()
    }
    trade.SetExpertMagicNumber(InpMagicNumber);
    trade.SetDeviationInPoints(InpDeviationPoints);
+
+   if(InpShowIndicators && !MQLInfoInteger(MQL_OPTIMIZATION))
+      ShowIndicatorsOnChart();
    return(INIT_SUCCEEDED);
+}
+
+// Adjunta un handle al grafico solo si aun no hay un indicador con ese nombre visible.
+bool ChartHasIndicator(const long chartId,const string namePart)
+{
+   int windows=(int)ChartGetInteger(chartId,CHART_WINDOWS_TOTAL);
+   for(int w=0;w<windows;w++)
+   {
+      int total=ChartIndicatorsTotal(chartId,w);
+      for(int k=0;k<total;k++)
+         if(StringFind(ChartIndicatorName(chartId,w,k),namePart)>=0) return(true);
+   }
+   return(false);
+}
+
+void ShowIndicatorsOnChart()
+{
+   long chartId=ChartID();
+   if(trendHandle!=INVALID_HANDLE && !ChartHasIndicator(chartId,"Trend Magic"))
+      ChartIndicatorAdd(chartId,0,trendHandle);
+   if(sslHandle!=INVALID_HANDLE && !ChartHasIndicator(chartId,"SSL Hybrid"))
+      ChartIndicatorAdd(chartId,0,sslHandle);
+   // El QQE es un oscilador: va en su propia subventana (nuevo indice = total de ventanas actual).
+   if(qqeHandle!=INVALID_HANDLE && !ChartHasIndicator(chartId,"QQE Mod"))
+   {
+      int sub=(int)ChartGetInteger(chartId,CHART_WINDOWS_TOTAL);
+      ChartIndicatorAdd(chartId,sub,qqeHandle);
+   }
+   ChartRedraw(chartId);
 }
 
 void OnDeinit(const int reason)
