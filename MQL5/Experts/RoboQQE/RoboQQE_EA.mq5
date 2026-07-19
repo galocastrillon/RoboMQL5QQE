@@ -4,25 +4,25 @@
 
 #include <Trade/Trade.mqh>
 
-// El robot evalúa exclusivamente velas cerradas; no abre operaciones dentro de una vela.
+// El robot evalua exclusivamente velas cerradas; no abre operaciones dentro de una vela.
 input ENUM_TIMEFRAMES InpTimeframe       = PERIOD_M5;
 input bool            InpUsePercentRisk  = true;
 input double          InpRiskPercent     = 1.0;
 input double          InpFixedLots       = 0.01;
 input ulong           InpMagicNumber     = 505200;
-input int             InpMaxSignalLag    = 0;    // 0 = las tres condiciones en la misma vela; máximo recomendado: 1
+input int             InpMaxSignalLag    = 0;    // 0 = las tres condiciones en la misma vela; maximo recomendado: 1
 input bool            InpUseFixedSL      = true;
 input double          InpFixedSL_Pips    = 20.0;
 input int             InpSwingLookback   = 5;
 input bool            InpUseATRStops     = true;
 input int             InpATRPeriod       = 14;
 input double          InpATRStopMultiplier = 1.5;
-input bool            InpUseTakeProfit   = false; // false: la salida en ganancia queda a decisión del usuario/trailing
+input bool            InpUseTakeProfit   = false; // false: la salida en ganancia queda a decision del usuario/trailing
 input double          InpRR_Ratio        = 1.5;   // Solo se utiliza si InpUseTakeProfit=true
 input bool            InpUseTrailingStop = true;
-input double          InpTrailingStartPips = 20.0; // Ganancia mínima antes de proteger la posición
+input double          InpTrailingStartPips = 20.0; // Ganancia minima antes de proteger la posicion
 input double          InpTrailingDistancePips = 15.0; // Distancia del SL respecto al precio actual
-input double          InpTrailingStepPips = 1.0; // Movimiento mínimo necesario para modificar el SL
+input double          InpTrailingStepPips = 1.0; // Movimiento minimo necesario para modificar el SL
 input bool            InpUseATRTrailing  = true;
 input double          InpTrailingStartATR = 1.0;
 input double          InpTrailingDistanceATR = 1.5;
@@ -60,7 +60,7 @@ int OnInit()
    atrHandle=iATR(_Symbol,InpTimeframe,InpATRPeriod);
    if(qqeHandle==INVALID_HANDLE || trendHandle==INVALID_HANDLE || sslHandle==INVALID_HANDLE || atrHandle==INVALID_HANDLE)
    {
-      Print("No se pudieron cargar los indicadores. Instale los tres archivos en MQL5\\Indicators\\RoboQQE y compílelos.");
+      Print("No se pudieron cargar los indicadores. Instale los tres archivos en MQL5\\Indicators\\RoboQQE y compilelos.");
       return(INIT_FAILED);
    }
    trade.SetExpertMagicNumber(InpMagicNumber);
@@ -339,11 +339,11 @@ double CalculateLots(const double entry,const double sl)
 void ExecuteSignal(const Signal signal)
 {
    double sl,tp;
-   if(!BuildStops(signal,sl,tp)) { Print("Operación omitida: el SL estructural no es válido para el precio actual."); return; }
+   if(!BuildStops(signal,sl,tp)) { Print("Operacion omitida: el SL estructural no es valido para el precio actual."); return; }
    MqlTick tick;
    if(!SymbolInfoTick(_Symbol,tick)) return;
    double lots=CalculateLots(signal==SIGNAL_BUY ? tick.ask : tick.bid,sl);
-   if(lots<=0.0) { Print("Operación omitida: no fue posible calcular el volumen por riesgo."); return; }
+   if(lots<=0.0) { Print("Operacion omitida: no fue posible calcular el volumen por riesgo."); return; }
    bool sent=(signal==SIGNAL_BUY ? trade.Buy(lots,_Symbol,0.0,sl,tp,"RoboQQE long") : trade.Sell(lots,_Symbol,0.0,sl,tp,"RoboQQE short"));
    if(!sent) Print("Error al enviar orden: ",trade.ResultRetcode()," - ",trade.ResultRetcodeDescription());
    else
@@ -361,16 +361,16 @@ void OnTick()
 {
    ManageTrailingStop();
    if(!IsNewClosedBar()) return;
-   if(DailyLossLimitReached()) { Print("Límite de pérdida diaria alcanzado."); return; }
-   if(!SpreadIsAcceptable()) { Print("Operación omitida: spread excesivo."); return; }
+   if(DailyLossLimitReached()) { Print("Limite de perdida diaria alcanzado."); return; }
+   if(!SpreadIsAcceptable()) { Print("Operacion omitida: spread excesivo."); return; }
    Signal signal=GetSignal();
    int positionType;
    if(HasPosition(positionType))
    {
       bool opposite=(signal==SIGNAL_BUY && positionType==POSITION_TYPE_SELL) || (signal==SIGNAL_SELL && positionType==POSITION_TYPE_BUY);
       if(opposite && InpCloseOnReverse && !trade.PositionClose(_Symbol))
-         Print("No se pudo cerrar la posición inversa: ",trade.ResultRetcodeDescription());
-      return; // nunca abre más de una operación en la misma vela
+         Print("No se pudo cerrar la posicion inversa: ",trade.ResultRetcodeDescription());
+      return; // nunca abre mas de una operacion en la misma vela
    }
    if(signal!=SIGNAL_NONE) ExecuteSignal(signal);
 }
