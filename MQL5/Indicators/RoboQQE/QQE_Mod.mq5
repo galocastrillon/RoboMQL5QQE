@@ -57,20 +57,34 @@ int OnCalculate(const int rates_total, const int prev_calculated, const datetime
    if(CopyBuffer(rsiHandle, 0, 0, rates_total, RsiBuffer) < rates_total)
       return(prev_calculated);
 
+   // Primera vela con RSI realmente valido. Durante el calentamiento el RSI puede
+   // devolver EMPTY_VALUE (~1.8e308); si esa cifra entra en la recursion se multiplica
+   // por (SF-1) y desborda a 1.#INF, contaminando toda la linea. Por eso se localiza aqui.
+   // El RSI esta acotado en [0,100]; cualquier valor fuera es un centinela de calentamiento.
+   int seed = 0;
+   while(seed < rates_total && (!MathIsValidNumber(RsiBuffer[seed]) || RsiBuffer[seed] < 0.0 || RsiBuffer[seed] > 100.0))
+      seed++;
+   if(seed >= rates_total - 1) return(prev_calculated);   // Aun no hay datos utiles.
+
    int start;
-   if(prev_calculated == 0)
+   if(prev_calculated == 0 || prev_calculated > rates_total)
    {
-      for(int i = 0; i < firstValid && i < rates_total; i++) QQEBuffer[i] = EMPTY_VALUE;
-      QQEBuffer[firstValid] = RsiBuffer[firstValid] - 50.0;   // Semilla del suavizado.
-      start = firstValid + 1;
+      for(int i = 0; i <= seed && i < rates_total; i++) QQEBuffer[i] = EMPTY_VALUE;
+      QQEBuffer[seed] = RsiBuffer[seed] - 50.0;             // Semilla del suavizado.
+      start = seed + 1;
    }
    else
-      start = prev_calculated - 1;                            // Recalcula la ultima vela (en formacion).
-
-   if(start < firstValid + 1) start = firstValid + 1;
+   {
+      start = prev_calculated - 1;                          // Recalcula la ultima vela (en formacion).
+      if(start <= seed) { QQEBuffer[seed] = RsiBuffer[seed] - 50.0; start = seed + 1; }
+   }
 
    for(int i = start; i < rates_total; i++)
-      QQEBuffer[i] = (QQEBuffer[i - 1] * (InpSmoothing - 1) + (RsiBuffer[i] - 50.0)) / InpSmoothing;
+   {
+      double rsi = RsiBuffer[i];
+      if(!MathIsValidNumber(rsi) || rsi < 0.0 || rsi > 100.0) { QQEBuffer[i] = QQEBuffer[i - 1]; continue; }
+      QQEBuffer[i] = (QQEBuffer[i - 1] * (InpSmoothing - 1) + (rsi - 50.0)) / InpSmoothing;
+   }
 
    return(rates_total);
 }
