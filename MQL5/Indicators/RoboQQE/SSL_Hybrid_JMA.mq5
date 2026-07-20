@@ -16,7 +16,6 @@ input double InpPhase          = 0.0; // -100..100; mayor valor reduce el retras
 double BaselineBuffer[];  // Buffer 0: baseline.
 double ColorBuffer[];     // Buffer 1: indice de color (0 alcista / 1 bajista).
 double DirectionBuffer[]; // Buffer 2: +1 / -1, lo lee el EA.
-int firstValid = 0;
 
 int OnInit()
 {
@@ -26,8 +25,9 @@ int OnInit()
    SetIndexBuffer(1, ColorBuffer, INDICATOR_COLOR_INDEX);
    SetIndexBuffer(2, DirectionBuffer, INDICATOR_CALCULATIONS);
 
-   firstValid = InpBaselineLength;
-   PlotIndexSetInteger(0, PLOT_DRAW_BEGIN, firstValid);
+   // La formula no requiere calentamiento real (usa close[] directo, sin sub-indicador
+   // externo): el valor ya es utilizable desde la primera vela. No se oculta ninguna barra.
+   PlotIndexSetInteger(0, PLOT_DRAW_BEGIN, 1);
    PlotIndexSetDouble(0, PLOT_EMPTY_VALUE, EMPTY_VALUE);
    IndicatorSetString(INDICATOR_SHORTNAME, "SSL Hybrid - JMA Baseline (" + (string)InpBaselineLength + ")");
    return(INIT_SUCCEEDED);
@@ -36,7 +36,7 @@ int OnInit()
 int OnCalculate(const int rates_total, const int prev_calculated, const datetime &time[], const double &open[],
                 const double &high[], const double &low[], const double &close[], const long &tick_volume[], const long &volume[], const int &spread[])
 {
-   if(rates_total < InpBaselineLength + 2) return(0);
+   if(rates_total < 2) return(0);   // Solo se necesita la vela previa para la primera iteracion.
 
    double baseAlpha = 2.0 / (InpBaselineLength + 1.0);
    double phaseAdj  = 1.0 + InpPhase / 100.0;
